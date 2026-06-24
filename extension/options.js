@@ -55,7 +55,7 @@ async function loadModels(key, selected) {
   for (const m of models) {
     const opt = document.createElement("option");
     opt.value = m.id;
-    opt.textContent = m.modality ? `${m.name} (${m.modality})` : m.name;
+    opt.textContent = m.modality ? `${m.id} (${m.modality})` : m.id;
     modelSelect.appendChild(opt);
   }
   if (selected && models.some((m) => m.id === selected)) {
