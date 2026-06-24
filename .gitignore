@@ -1,0 +1,6 @@
+# Editor / OS
+.DS_Store
+*.swp
+
+# Local planning / tooling metadata
+.getaibd/

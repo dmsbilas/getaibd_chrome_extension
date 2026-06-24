@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GetAIBD Page Assistant</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Ask about this page</h1>
+      <button id="settings" class="link" title="Open settings">⚙</button>
+    </header>
+
+    <div id="needsSetup" class="setup hidden">
+      <p>You need to add your GetAIBD API key first.</p>
+      <button id="openOptions">Open settings</button>
+    </div>
+
+    <main id="main">
+      <textarea
+        id="prompt"
+        rows="3"
+        placeholder="e.g. Summarize this page in 3 bullet points"
+      ></textarea>
+      <button id="ask">Ask</button>
+      <div id="answer" class="answer hidden"></div>
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

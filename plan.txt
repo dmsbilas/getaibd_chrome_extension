@@ -1,0 +1,8 @@
+- I want to create a Google Chrome browser plugin.
+- That plugin takes API Key that users will manually provides.
+- Using that API Key - read getaidb-api-docs.pdf file for API documentation.
+- after pasteing the api key in plugin setting page, automatically a selectbox arrives with models. Those models will come from API call mentioned in the pdf file. 
+- user saves the settings. 
+
+
+- If user browses any website page, if he clicks the extension button, there will be a prompt writing input field. What ever user writes, the plugin will read the page and makes an API call to give answer to the user's query. 

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GetAIBD Page Assistant — Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="card">
+      <h1>GetAIBD Page Assistant</h1>
+      <p class="subtitle">Settings</p>
+
+      <label for="apiKey">API Key</label>
+      <input
+        id="apiKey"
+        type="password"
+        placeholder="aiob_..."
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <p class="hint">
+        Your key is sent only to <code>getaibd.com</code> and stored locally in this browser.
+      </p>
+
+      <label for="model">Model</label>
+      <select id="model" disabled>
+        <option value="">Enter a valid API key to load models…</option>
+      </select>
+
+      <div class="row">
+        <button id="save" disabled>Save settings</button>
+        <span id="balance" class="balance"></span>
+      </div>
+
+      <p id="status" class="status" role="status"></p>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>
