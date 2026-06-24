@@ -28,12 +28,16 @@
     position: fixed; top: 20px; right: 20px;
     width: 390px; max-width: calc(100vw - 24px);
     height: 540px; max-height: calc(100vh - 40px);
+    min-width: 300px; min-height: 320px;
     display: flex; flex-direction: column;
     background: #1e1f24; color: #e8e8ea;
     border: 1px solid #34353b; border-radius: 12px;
     box-shadow: 0 14px 44px rgba(0,0,0,.55);
     z-index: 2147483646; overflow: hidden; font-size: 14px;
   }
+  .gaibd-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; z-index: 4; }
+  .gaibd-resize::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #6b6c72; border-bottom: 2px solid #6b6c72; }
+  .gaibd-resize:hover::after { border-color: #b8b9bf; }
   .gaibd-header { display:flex; align-items:center; gap:8px; padding:10px 12px; background:#26272d; border-bottom:1px solid #34353b; cursor: grab; user-select:none; }
   .gaibd-header.dragging { cursor: grabbing; }
   .gaibd-grip { color:#6b6c72; font-size:13px; letter-spacing:1px; }
@@ -115,6 +119,7 @@
         <textarea id="gaibd-input" rows="1" placeholder="Ask about this page\u2026"></textarea>
         <button id="gaibd-send" title="Send">\u27A4</button>
       </div>
+      <div class="gaibd-resize" id="gaibd-resize" title="Drag to resize"></div>
     </div>
   `;
   shadow.appendChild(wrapper);
@@ -123,6 +128,7 @@
   const $ = (id) => shadow.getElementById(id);
   const panelEl = shadow.querySelector(".gaibd-panel");
   const dragHandle = $("gaibd-drag");
+  const resizeHandle = $("gaibd-resize");
   const modelSelect = $("gaibd-model");
   const setupEl = $("gaibd-setup");
   const conversationEl = $("gaibd-conversation");
@@ -480,11 +486,35 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + "px";
   }
 
-  // ── Dragging (with a viewport overlay so dragging works over iframes) ──
+  // ── Dragging & resizing (overlay makes both work over page iframes) ──
+  const MIN_W = 300, MIN_H = 320;
   function clamp(v, min, max) { return Math.max(min, Math.min(v, max)); }
 
-  async function restorePosition() {
-    const { panelPos } = await store.get("panelPos");
+  // Switch the panel from its default right/top CSS anchor to explicit
+  // left/top in pixels, so drag and resize math is consistent.
+  function anchorLeftTop() {
+    const rect = panelEl.getBoundingClientRect();
+    panelEl.style.left = rect.left + "px";
+    panelEl.style.top = rect.top + "px";
+    panelEl.style.right = "auto";
+    panelEl.style.bottom = "auto";
+    return rect;
+  }
+
+  function makeOverlay(cursor) {
+    const ov = document.createElement("div");
+    ov.className = "gaibd-overlay";
+    ov.style.cursor = cursor;
+    shadow.appendChild(ov);
+    return ov;
+  }
+
+  async function restoreLayout() {
+    const { panelPos, panelSize } = await store.get(["panelPos", "panelSize"]);
+    if (panelSize && panelSize.width && panelSize.height) {
+      panelEl.style.width = panelSize.width;
+      panelEl.style.height = panelSize.height;
+    }
     if (panelPos && panelPos.left && panelPos.top) {
       panelEl.style.left = panelPos.left;
       panelEl.style.top = panelPos.top;
@@ -501,8 +531,6 @@
       const top = clamp(startTop + (e.clientY - startY), 0, window.innerHeight - panelEl.offsetHeight);
       panelEl.style.left = left + "px";
       panelEl.style.top = top + "px";
-      panelEl.style.right = "auto";
-      panelEl.style.bottom = "auto";
     }
     function onUp() {
       if (overlay) { overlay.remove(); overlay = null; }
@@ -513,21 +541,51 @@
     }
     dragHandle.addEventListener("mousedown", (e) => {
       if (e.target.closest("button")) return; // let header buttons work
-      const rect = panelEl.getBoundingClientRect();
+      const rect = anchorLeftTop();
       startX = e.clientX; startY = e.clientY;
       startLeft = rect.left; startTop = rect.top;
       dragHandle.classList.add("dragging");
-
-      // Transparent overlay captures the mouse even over page iframes.
-      overlay = document.createElement("div");
-      overlay.className = "gaibd-overlay";
+      overlay = makeOverlay("grabbing");
       overlay.addEventListener("mousemove", onMove);
       overlay.addEventListener("mouseup", onUp);
-      shadow.appendChild(overlay);
-
       document.addEventListener("mousemove", onMove, true);
       document.addEventListener("mouseup", onUp, true);
       e.preventDefault();
+    });
+  }
+
+  function initResize() {
+    let startX = 0, startY = 0, startW = 0, startH = 0, startLeft = 0, startTop = 0, overlay = null;
+
+    function onMove(e) {
+      const maxW = window.innerWidth - startLeft - 8;
+      const maxH = window.innerHeight - startTop - 8;
+      const w = clamp(startW + (e.clientX - startX), MIN_W, maxW);
+      const h = clamp(startH + (e.clientY - startY), MIN_H, maxH);
+      panelEl.style.width = w + "px";
+      panelEl.style.height = h + "px";
+    }
+    function onUp() {
+      if (overlay) { overlay.remove(); overlay = null; }
+      document.removeEventListener("mousemove", onMove, true);
+      document.removeEventListener("mouseup", onUp, true);
+      store.set({
+        panelSize: { width: panelEl.style.width, height: panelEl.style.height },
+        panelPos: { left: panelEl.style.left, top: panelEl.style.top },
+      });
+    }
+    resizeHandle.addEventListener("mousedown", (e) => {
+      const rect = anchorLeftTop();
+      startX = e.clientX; startY = e.clientY;
+      startW = rect.width; startH = rect.height;
+      startLeft = rect.left; startTop = rect.top;
+      overlay = makeOverlay("nwse-resize");
+      overlay.addEventListener("mousemove", onMove);
+      overlay.addEventListener("mouseup", onUp);
+      document.addEventListener("mousemove", onMove, true);
+      document.addEventListener("mouseup", onUp, true);
+      e.preventDefault();
+      e.stopPropagation();
     });
   }
 
@@ -544,7 +602,8 @@
   });
 
   initDrag();
-  restorePosition();
+  initResize();
+  restoreLayout();
   loadModels();
   loadConversation();
   inputEl.focus();

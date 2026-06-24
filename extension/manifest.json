@@ -4,7 +4,14 @@
   "version": "1.0.0",
   "description": "Ask questions about any web page using the GetAIBD Developer API.",
   "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": ["https://getaibd.com/*"],
+  "host_permissions": ["https://getaibd.com/*", "https://mail.google.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["gmail-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_title": "GetAIBD Page Assistant",
     "default_icon": {
