@@ -7,25 +7,48 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <header>
-      <h1>Ask about this page</h1>
-      <button id="settings" class="link" title="Open settings">⚙</button>
-    </header>
-
-    <div id="needsSetup" class="setup hidden">
-      <p>You need to add your GetAIBD API key first.</p>
-      <button id="openOptions">Open settings</button>
+    <!-- Drag handle -->
+    <div id="drag-handle" class="drag-handle">
+      <span class="drag-dots">⋮⋮</span>
+      <span class="drag-title">GetAIBD Assistant</span>
+      <button id="clear-btn" class="icon-btn" title="Clear conversation">🗑</button>
+      <button id="copy-btn" class="icon-btn" title="Copy conversation">📋</button>
+      <button id="settings-btn" class="icon-btn" title="Open settings">⚙</button>
     </div>
 
+    <!-- Setup gate (no API key) -->
+    <div id="needsSetup" class="setup hidden">
+      <div class="setup-content">
+        <p>Add your GetAIBD API key to get started.</p>
+        <button id="openOptions">Open settings</button>
+      </div>
+    </div>
+
+    <!-- Conversation thread -->
     <main id="main">
-      <textarea
-        id="prompt"
-        rows="3"
-        placeholder="e.g. Summarize this page in 3 bullet points"
-      ></textarea>
-      <button id="ask">Ask</button>
-      <div id="answer" class="answer hidden"></div>
-      <p id="status" class="status"></p>
+      <div id="conversation" class="conversation">
+        <!-- Welcome message (only shown when no history) -->
+        <div id="welcome-msg" class="message assistant welcome">
+          <div class="message-content">
+            Hello! I can answer questions about the page you're viewing. Ask me anything!
+          </div>
+        </div>
+        <!-- Messages are rendered here dynamically -->
+      </div>
+      <div id="status" class="status"></div>
+      <div class="input-area">
+        <textarea
+          id="chat-input"
+          rows="1"
+          placeholder="Ask about this page…"
+        ></textarea>
+        <button id="send-btn" class="send-btn" title="Send (Enter)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
     </main>
 
     <script src="popup.js"></script>

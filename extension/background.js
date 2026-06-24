@@ -63,7 +63,7 @@ async function getBalance(key) {
 }
 
 // POST /chat/completions (non-streaming) -> assistant text
-async function chat({ model, pageText, pageUrl, pageTitle, question }) {
+async function chat({ model, pageText, pageUrl, pageTitle, question, history }) {
   if (!model) throw new Error("No model selected. Choose a model in the extension options.");
 
   const context = [
@@ -82,11 +82,20 @@ async function chat({ model, pageText, pageUrl, pageTitle, question }) {
         "Answer the user's question using the provided web page content. " +
         "If the answer is not in the page, say so and answer from general knowledge.",
     },
-    {
-      role: "user",
-      content: `${context}\n\n---\nQuestion: ${question}`,
-    },
   ];
+
+  // If we have conversation history, include it so the model remembers context
+  if (Array.isArray(history) && history.length > 0) {
+    for (const msg of history) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  // Add the current question with page context
+  messages.push({
+    role: "user",
+    content: `${context}\n\n---\nQuestion: ${question}`,
+  });
 
   const data = await apiFetch("/chat/completions", {
     method: "POST",

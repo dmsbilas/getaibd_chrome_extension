@@ -9,8 +9,10 @@ to the [GetAIBD Developer API](https://getaibd.com/v1/api) (OpenAI-compatible).
 - **Settings page** — paste your GetAIBD API key (starts with `aiob_`). The key
   is validated by calling `GET /models`, and a model dropdown is populated
   automatically. Your remaining credit balance (`GET /balance`) is shown too.
-- **Popup** — type a prompt, click **Ask**, and the extension reads the active
-  page and calls `POST /chat/completions` (non-streaming) to answer.
+- **Popup** — a ChatGPT-style conversation UI. Type a message, press **Enter**
+  (or click send), and the extension reads the active page and calls
+  `POST /chat/completions` (non-streaming) to answer. Messages render as chat
+  bubbles and the panel has a draggable header.
 - Your key is stored locally (`chrome.storage.local`) and only ever sent to
   `getaibd.com`.
 
