@@ -4,3 +4,8 @@
 
 # Local planning / tooling metadata
 .getaibd/
+
+# Build artifacts and signing key (never commit the private key)
+extension.crx
+extension.zip
+extension.pem

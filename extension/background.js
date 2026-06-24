@@ -16,44 +16,142 @@ function authHeaders(key) {
   };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Transient gateway/server errors worth retrying.
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+// One fetch attempt with a hard timeout so a stalled gateway doesn't hang us.
+async function fetchOnce(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Generic helper that throws a readable Error on failure.
-async function apiFetch(path, { method = "GET", key, body } = {}) {
+// Retries transient gateway errors (502/503/504/429/etc.) and timeouts, which
+// are common with non-streamed completions behind a load balancer.
+async function apiFetch(path, { method = "GET", key, body, retries = 2, timeoutMs = 90000 } = {}) {
   const apiKey = key || (await getApiKey());
   if (!apiKey) {
     throw new Error("No API key saved. Open the extension options and add your GetAIBD key.");
   }
-  const res = await fetch(`${API_BASE}${path}`, {
+
+  const url = `${API_BASE}${path}`;
+  const options = {
     method,
     headers: authHeaders(apiKey),
     body: body ? JSON.stringify(body) : undefined,
-  });
+  };
 
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch (_) {
-    data = { raw: text };
-  }
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) await sleep(800 * attempt); // simple linear backoff
 
-  if (!res.ok) {
+    let res;
+    try {
+      res = await fetchOnce(url, options, timeoutMs);
+    } catch (err) {
+      // Network failure or timeout (AbortError) — retry while we have attempts.
+      lastErr = new Error(
+        err.name === "AbortError"
+          ? "The request timed out. The server took too long to respond."
+          : `Network error: ${err.message || String(err)}`
+      );
+      continue;
+    }
+
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_) {
+      data = { raw: text };
+    }
+
+    if (res.ok) return data;
+
     const msg =
       (data && (data.error?.message || data.error || data.message)) ||
       `Request failed (HTTP ${res.status})`;
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    lastErr = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+
+    // Retry transient server/gateway errors; fail fast on 4xx like 401/403.
+    if (!RETRYABLE_STATUS.has(res.status)) break;
   }
-  return data;
+
+  throw lastErr || new Error("Request failed.");
+}
+
+// Coerce a value to a finite number, or null if it isn't one.
+function toNumber(v) {
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return typeof n === "number" && isFinite(n) ? n : null;
+}
+
+// Public catalog with per-model pricing (credits per 1k tokens). It has no auth
+// and is the same source the getaibd.com pricing page uses, so we rely on it to
+// fill in rates that the OpenAI-compatible /models endpoint may omit.
+async function getCatalogPriceMap() {
+  try {
+    const res = await fetch("https://getaibd.com/v1/catalog");
+    if (!res.ok) return {};
+    const data = await res.json();
+    const families = Array.isArray(data?.families) ? data.families : [];
+    const map = {};
+    for (const fam of families) {
+      const models = Array.isArray(fam?.models) ? fam.models : [];
+      for (const m of models) {
+        if (!m?.id) continue;
+        map[m.id] = {
+          inputTokenRate: toNumber(m.input_token_rate),
+          outputTokenRate: toNumber(m.token_rate),
+          modality: fam.modality,
+        };
+      }
+    }
+    return map;
+  } catch (_) {
+    return {};
+  }
+}
+
+// Flat, price-sortable model list straight from the public catalog
+// (getaibd.com/v1/catalog). No API key required — used so the dropdown can
+// always show the model list from getaibd.com, even before a key is entered.
+async function getCatalogModels() {
+  const map = await getCatalogPriceMap();
+  return Object.entries(map).map(([id, p]) => ({
+    id,
+    name: id,
+    modality: p.modality,
+    inputTokenRate: p.inputTokenRate ?? null,
+    outputTokenRate: p.outputTokenRate ?? null,
+  }));
 }
 
 // GET /models -> { data: [{ id, name, ... }] }
+// Each model is enriched with input/output token rates (credits per 1k tokens)
+// so the options page can sort the list by price.
 async function getModels(key) {
   const data = await apiFetch("/models", { key });
   const list = Array.isArray(data?.data) ? data.data : [];
-  return list.map((m) => ({
-    id: m.id,
-    name: m.name || m.id,
-    modality: m.modality,
-  }));
+  const priceMap = await getCatalogPriceMap();
+
+  return list.map((m) => {
+    const price = priceMap[m.id] || {};
+    return {
+      id: m.id,
+      name: m.name || m.id,
+      modality: m.modality || price.modality,
+      inputTokenRate: toNumber(m.input_token_rate) ?? price.inputTokenRate ?? null,
+      outputTokenRate: toNumber(m.token_rate) ?? price.outputTokenRate ?? null,
+    };
+  });
 }
 
 // GET /balance -> { credits_balance: number }
@@ -109,7 +207,29 @@ async function chat({ model, pageText, pageUrl, pageTitle, question, history }) 
   };
 }
 
-// Message router for options/popup pages.
+// Pages we can't inject the panel into.
+const RESTRICTED_URL = /^(chrome|edge|about|chrome-extension|devtools|view-source|moz-extension|chrome-search):/;
+
+// Clicking the toolbar icon injects (and toggles) the draggable in-page panel.
+// panel.js itself removes the panel if it's already open, so injecting again
+// acts as a toggle.
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab || !tab.id) return;
+  if (RESTRICTED_URL.test(tab.url || "")) {
+    // Can't run on browser/system pages; nothing we can do here.
+    return;
+  }
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["panel.js"],
+    });
+  } catch (err) {
+    console.warn("GetAIBD: could not open panel on this page:", err);
+  }
+});
+
+// Message router for the in-page panel and the options page.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     try {
@@ -117,11 +237,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case "getModels":
           sendResponse({ ok: true, models: await getModels(msg.key) });
           break;
+        case "getCatalog":
+          sendResponse({ ok: true, models: await getCatalogModels() });
+          break;
         case "getBalance":
           sendResponse({ ok: true, balance: await getBalance(msg.key) });
           break;
         case "chat":
           sendResponse({ ok: true, ...(await chat(msg.payload)) });
+          break;
+        case "openOptions":
+          chrome.runtime.openOptionsPage();
+          sendResponse({ ok: true });
           break;
         default:
           sendResponse({ ok: false, error: `Unknown message type: ${msg?.type}` });

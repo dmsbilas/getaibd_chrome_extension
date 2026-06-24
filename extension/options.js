@@ -5,7 +5,45 @@ const saveBtn = document.getElementById("save");
 const statusEl = document.getElementById("status");
 const balanceEl = document.getElementById("balance");
 
+// Model selected by default when nothing has been saved yet.
+const DEFAULT_MODEL = "qwen-flash";
+
 let debounceTimer = null;
+
+// The price we sort by: output token rate, falling back to input token rate.
+function priceOf(m) {
+  if (typeof m.outputTokenRate === "number") return m.outputTokenRate;
+  if (typeof m.inputTokenRate === "number") return m.inputTokenRate;
+  return null;
+}
+
+// Cheapest first; models without a known price are pushed to the end.
+function byPriceAsc(a, b) {
+  const ap = priceOf(a);
+  const bp = priceOf(b);
+  if (ap === null && bp === null) return a.id.localeCompare(b.id);
+  if (ap === null) return 1;
+  if (bp === null) return -1;
+  if (ap !== bp) return ap - bp;
+  return a.id.localeCompare(b.id);
+}
+
+function formatRate(r) {
+  if (typeof r !== "number") return null;
+  return (Math.round(r * 100) / 100).toLocaleString();
+}
+
+// e.g. "qwen-flash (chat · 1.84 in / 5.52 out credits/1k)"
+function modelLabel(m) {
+  const meta = [];
+  if (m.modality) meta.push(m.modality);
+  const inRate = formatRate(m.inputTokenRate);
+  const outRate = formatRate(m.outputTokenRate);
+  if (inRate !== null || outRate !== null) {
+    meta.push(`${inRate ?? "?"} in / ${outRate ?? "?"} out credits/1k`);
+  }
+  return meta.length ? `${m.id} (${meta.join(" · ")})` : m.id;
+}
 
 function setStatus(msg, kind = "") {
   statusEl.textContent = msg || "";
@@ -51,14 +89,21 @@ async function loadModels(key, selected) {
     return;
   }
 
+  const sorted = [...models].sort(byPriceAsc);
+
   modelSelect.innerHTML = "";
-  for (const m of models) {
+  for (const m of sorted) {
     const opt = document.createElement("option");
     opt.value = m.id;
-    opt.textContent = m.modality ? `${m.id} (${m.modality})` : m.id;
+    opt.textContent = modelLabel(m);
     modelSelect.appendChild(opt);
   }
-  if (selected && models.some((m) => m.id === selected)) {
+
+  // Default to qwen-flash whenever it's available; only fall back to a
+  // previously saved model (or the cheapest one) if qwen-flash is missing.
+  if (sorted.some((m) => m.id === DEFAULT_MODEL)) {
+    modelSelect.value = DEFAULT_MODEL;
+  } else if (selected && sorted.some((m) => m.id === selected)) {
     modelSelect.value = selected;
   }
   modelSelect.disabled = false;
