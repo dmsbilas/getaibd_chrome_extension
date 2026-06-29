@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "GetAIBD Page Assistant",
   "version": "1.0.0",
-  "description": "Ask questions about any web page using the GetAIBD Developer API.",
+  "description": "AI assistant that answers questions about the page you are viewing and helps you draft emails in Gmail.",
+  "homepage_url": "https://getaibd.com",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["https://getaibd.com/*", "https://mail.google.com/*"],
   "content_scripts": [

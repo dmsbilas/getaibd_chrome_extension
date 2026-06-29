@@ -1,0 +1,10 @@
+{
+  "name": "getaibd-chrome-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GetAIBD Page Assistant Chrome extension + Gmail MCP server.",
+  "scripts": {
+    "zip": "cd extension && rm -f ../getaibd-page-assistant-v1.0.0.zip && zip -r ../getaibd-page-assistant-v1.0.0.zip manifest.json background.js panel.js gmail-bridge.js options.html options.css options.js icons -x '*.DS_Store'",
+    "zip:lite": "node scripts/build-lite.mjs"
+  }
+}

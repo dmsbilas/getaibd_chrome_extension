@@ -13,3 +13,6 @@ extension.pem
 # Node deps (MCP server)
 node_modules/
 mcp-server/node_modules/
+
+# Build output
+build/
